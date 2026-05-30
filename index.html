@@ -49,7 +49,10 @@
   </div>
   <div class="field"><label>ブランチ</label>
     <input type="text" id="ghBranch" value="main"></div>
-  <button class="btn btn-secondary" onclick="saveSettings()">💾 設定を保存</button>
+  <div style="display:flex;gap:8px;margin-top:0;">
+    <button class="btn btn-secondary" onclick="saveSettings()" style="flex:1;">💾 設定を保存</button>
+    <button class="btn btn-secondary" onclick="openGitHubPages()" style="flex:1;">🌐 Pages を開く</button>
+  </div>
 </div>
 
 <div class="card">
@@ -69,8 +72,8 @@
 <div class="card">
   <h2>アップロード</h2>
   <div class="field">
-    <label>GitHubトークン（repo権限）<span style="color:#00d4aa;font-size:11px;"> ※タブを閉じると消去</span></label>
-    <input type="password" id="ghToken" placeholder="ghp_..." oninput="sessionStorage.setItem('gh_token',this.value)">
+    <label>GitHubトークン（repo権限）<span style="color:#00d4aa;font-size:11px;"> ※このデバイスに保存</span></label>
+    <input type="password" id="ghToken" placeholder="ghp_..." oninput="localStorage.setItem('gh_token',this.value)">
   </div>
   <div class="field"><label>コミットメッセージ</label>
     <input type="text" id="commitMsg" value="Update files"></div>
@@ -169,6 +172,13 @@ async function fetchRepos() {
   } catch(e) {
     showLog('❌ ' + e.message, 'err');
   }
+}
+
+function openGitHubPages() {
+  const user = document.getElementById('ghUser').value.trim();
+  const repo = document.getElementById('ghRepo').value.trim();
+  if (!user || !repo) { showLog('ユーザー名とリポジトリ名を設定してください', 'err'); return; }
+  window.open(`https://${user}.github.io/${repo}/`, '_blank');
 }
 
 function saveSettings() {
@@ -310,7 +320,7 @@ async function uploadAll() {
 }
 
 loadSettings();
-const savedToken = sessionStorage.getItem('gh_token');
+const savedToken = localStorage.getItem('gh_token');
 if (savedToken) document.getElementById('ghToken').value = savedToken;
 </script>
 </body>
