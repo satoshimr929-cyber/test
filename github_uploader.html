@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GitHub ファイルアップローダー</title>
+<style>
+  :root{--bg:#0f1117;--surface:#1a1d27;--surface2:#22263a;--border:#2e3352;--accent:#4f7cff;--accent2:#00d4aa;--warn:#ff6b6b;--text:#e8eaf6;--text-muted:#7b82b0;}
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding:24px 16px;}
+  h1{text-align:center;font-size:20px;font-weight:700;margin-bottom:24px;color:var(--accent);}
+  .card{max-width:600px;margin:0 auto 20px;background:var(--surface);border:1.5px solid var(--border);border-radius:12px;padding:20px;}
+  .card h2{font-size:14px;font-weight:700;color:var(--text-muted);margin-bottom:14px;text-transform:uppercase;letter-spacing:.05em;}
+  .field{margin-bottom:12px;}
+  .field label{display:block;font-size:12px;color:var(--text-muted);margin-bottom:6px;}
+  .field input{width:100%;background:var(--surface2);border:1.5px solid var(--border);border-radius:8px;color:var(--text);font-size:14px;padding:10px 14px;outline:none;font-family:inherit;}
+  .field input:focus{border-color:var(--accent);}
+  .btn{padding:12px 20px;border-radius:10px;border:none;font-family:inherit;font-size:14px;font-weight:700;cursor:pointer;transition:opacity .2s;width:100%;margin-top:8px;}
+  .btn-primary{background:var(--accent);color:white;}
+  .btn-secondary{background:var(--surface2);color:var(--text);border:1.5px solid var(--border);}
+  .btn:disabled{opacity:.4;cursor:not-allowed;}
+  .drop-zone{border:2px dashed var(--border);border-radius:12px;padding:32px;text-align:center;cursor:pointer;transition:border-color .2s;margin-bottom:14px;}
+  .drop-zone:hover,.drop-zone.over{border-color:var(--accent);}
+  .drop-zone p{color:var(--text-muted);font-size:13px;margin-top:8px;}
+  .file-item{display:flex;align-items:flex-start;gap:10px;background:var(--surface2);border:1.5px solid var(--border);border-radius:8px;padding:10px 14px;margin-bottom:8px;}
+  .file-item .fname{flex:1;font-size:13px;word-break:break-all;}
+  .file-item .status{font-size:18px;min-width:24px;text-align:center;}
+  .file-item .remove{background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:18px;padding:0;line-height:1;}
+  .path-input{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;padding:4px 8px;margin-top:4px;font-family:monospace;}
+  .log{background:var(--bg);border:1.5px solid var(--border);border-radius:8px;padding:14px;font-size:12px;font-family:monospace;max-height:200px;overflow-y:auto;color:var(--text-muted);}
+  .ok{color:#00d4aa;} .err{color:#ff6b6b;}
+</style>
+</head>
+<body>
+<h1>🚀 GitHub ファイルアップローダー</h1>
+
+<div class="card">
+  <h2>リポジトリ設定</h2>
+  <div class="field"><label>GitHubユーザー名</label>
+    <input type="text" id="ghUser" placeholder="例: satoshimr929-cyber"></div>
+  <div class="field">
+    <label>リポジトリ名</label>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <select id="ghRepo" style="flex:1;background:var(--surface2);border:1.5px solid var(--border);border-radius:8px;color:var(--text);font-size:14px;padding:10px 14px;outline:none;font-family:inherit;">
+        <option value="">── 取得ボタンで読み込む ──</option>
+      </select>
+      <button class="btn btn-secondary" onclick="fetchRepos()" style="width:auto;padding:10px 14px;margin-top:0;white-space:nowrap;flex-shrink:0;">🔍 取得</button>
+    </div>
+  </div>
+  <div class="field">
+    <label>ブランチ</label>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <select id="ghBranch" style="flex:1;background:var(--surface2);border:1.5px solid var(--border);border-radius:8px;color:var(--text);font-size:14px;padding:10px 14px;outline:none;font-family:inherit;">
+        <option value="main">main</option>
+      </select>
+      <button class="btn btn-secondary" onclick="fetchBranches()" style="width:auto;padding:10px 14px;margin-top:0;white-space:nowrap;flex-shrink:0;">🔍 取得</button>
+    </div>
+  </div>
+  <div style="display:flex;gap:8px;margin-top:0;">
+    <button class="btn btn-secondary" onclick="saveSettings()" style="flex:1;">💾 設定を保存</button>
+    <button class="btn btn-secondary" onclick="openGitHubPages()" style="flex:1;">🌐 Pages を開く</button>
+  </div>
+</div>
+
+<div class="card">
+  <h2>ファイル選択</h2>
+  <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()"
+    ondragover="event.preventDefault();this.classList.add('over')"
+    ondragleave="this.classList.remove('over')"
+    ondrop="handleDrop(event)">
+    <div style="font-size:36px;">📁</div>
+    <p>タップまたはドラッグ＆ドロップ</p>
+    <p style="font-size:11px;margin-top:4px;">複数ファイル対応</p>
+  </div>
+  <input type="file" id="fileInput" multiple style="display:none" onchange="addFiles(this.files)">
+  <div id="fileList"></div>
+</div>
+
+<div class="card">
+  <h2>アップロード</h2>
+  <div class="field">
+    <label>GitHubトークン（repo権限）<span style="color:#00d4aa;font-size:11px;"> ※このデバイスに保存</span></label>
+    <input type="password" id="ghToken" placeholder="ghp_..." oninput="localStorage.setItem('gh_token',this.value)">
+  </div>
+  <div class="field"><label>コミットメッセージ</label>
+    <input type="text" id="commitMsg" value="Update files"></div>
+  <div style="display:flex;gap:8px;">
+    <button class="btn btn-secondary" onclick="clearFiles()" style="width:auto;flex:1;">🗑️ クリア</button>
+    <button class="btn btn-primary" id="uploadBtn" onclick="uploadAll()" style="flex:2;">🚀 アップロード</button>
+  </div>
+</div>
+
+<div class="card">
+  <h2>ファイル管理</h2>
+  <button class="btn btn-secondary" onclick="fetchRepoFiles()" style="margin-bottom:12px;">📂 リポジトリのファイル一覧を取得</button>
+  <div id="repoFileList"></div>
+</div>
+
+<div class="card">
+  <h2>ログ</h2>
+  <div class="log" id="log"><span>ここにログが表示されます</span></div>
+</div>
+
+<script>
+let files = [];
+
+async function fetchRepoFiles() {
+  const user   = document.getElementById('ghUser').value.trim();
+  const repo   = document.getElementById('ghRepo').value.trim();
+  const branch = document.getElementById('ghBranch').value.trim() || 'main';
+  const token  = document.getElementById('ghToken').value.trim();
+  if (!user || !repo) { showLog('ユーザー名とリポジトリ名を設定してください', 'err'); return; }
+  if (!token) { showLog('トークンを入力してください', 'err'); return; }
+  showLog('ファイル一覧を取得中...');
+  try {
+    const res = await fetch(`https://api.github.com/repos/${user}/${repo}/git/trees/${branch}?recursive=1`, {
+      headers: { 'Authorization': 'token ' + token }
+    });
+    if (!res.ok) throw new Error('取得失敗: ' + res.status);
+    const data = await res.json();
+    const fileItems = data.tree.filter(item => item.type === 'blob');
+    const el = document.getElementById('repoFileList');
+    if (fileItems.length === 0) {
+      el.innerHTML = '<div style="color:var(--text-muted);font-size:13px;">ファイルがありません</div>';
+      return;
+    }
+    el.innerHTML = fileItems.map(item => `
+      <div class="file-item" style="justify-content:space-between;">
+        <span style="font-size:13px;word-break:break-all;flex:1;">📄 ${item.path}</span>
+        <button onclick="deleteFile('${item.path}','${item.sha}')" style="background:none;border:1px solid var(--warn);border-radius:6px;color:var(--warn);font-size:12px;padding:4px 10px;cursor:pointer;white-space:nowrap;flex-shrink:0;margin-left:8px;">🗑️ 削除</button>
+      </div>`).join('');
+    showLog(`✅ ${fileItems.length}件のファイルを取得しました`, 'ok');
+  } catch(e) {
+    showLog('❌ ' + e.message, 'err');
+  }
+}
+
+async function deleteFile(path, sha) {
+  if (!confirm(`「${path}」を削除しますか？\nこの操作は元に戻せません。`)) return;
+  const user   = document.getElementById('ghUser').value.trim();
+  const repo   = document.getElementById('ghRepo').value.trim();
+  const branch = document.getElementById('ghBranch').value.trim() || 'main';
+  const token  = document.getElementById('ghToken').value.trim();
+  showLog(path + ' を削除中...');
+  try {
+    const res = await fetch(`https://api.github.com/repos/${user}/${repo}/contents/${path}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': 'token ' + token, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: `Delete ${path}`, sha, branch })
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.message || res.status);
+    }
+    showLog(`✅ ${path} を削除しました`, 'ok');
+    fetchRepoFiles(); // 一覧を更新
+  } catch(e) {
+    showLog('❌ ' + e.message, 'err');
+  }
+}
+
+async function fetchRepos() {
+  const user  = document.getElementById('ghUser').value.trim();
+  const token = document.getElementById('ghToken').value.trim();
+  if (!user)  { showLog('ユーザー名を入力してください', 'err'); return; }
+  if (!token) { showLog('先にトークンを入力してください', 'err'); return; }
+  showLog('リポジトリ一覧を取得中...');
+  try {
+    const res = await fetch(`https://api.github.com/users/${user}/repos?per_page=100&sort=updated`, {
+      headers: { 'Authorization': 'token ' + token }
+    });
+    if (!res.ok) throw new Error('取得失敗: ' + res.status);
+    const repos = await res.json();
+    const sel = document.getElementById('ghRepo');
+    const current = sel.value;
+    sel.innerHTML = '<option value="">── 選択してください ──</option>' +
+      repos.map(r => `<option value="${r.name}" ${r.name === current ? 'selected' : ''}>${r.name}</option>`).join('');
+    showLog(`✅ ${repos.length}件のリポジトリを取得しました`, 'ok');
+  } catch(e) {
+    showLog('❌ ' + e.message, 'err');
+  }
+}
+
+async function fetchBranches() {
+  const user  = document.getElementById('ghUser').value.trim();
+  const repo  = document.getElementById('ghRepo').value.trim();
+  const token = document.getElementById('ghToken').value.trim();
+  if (!user || !repo) { showLog('ユーザー名とリポジトリ名を設定してください', 'err'); return; }
+  if (!token) { showLog('先にトークンを入力してください', 'err'); return; }
+  showLog('ブランチ一覧を取得中...');
+  try {
+    const res = await fetch(`https://api.github.com/repos/${user}/${repo}/branches`, {
+      headers: { 'Authorization': 'token ' + token }
+    });
+    if (!res.ok) throw new Error('取得失敗: ' + res.status);
+    const branches = await res.json();
+    const sel = document.getElementById('ghBranch');
+    const current = sel.value;
+    sel.innerHTML = branches.map(b =>
+      `<option value="${b.name}" ${b.name === current ? 'selected' : ''}>${b.name}</option>`
+    ).join('');
+    showLog(`✅ ${branches.length}件のブランチを取得しました`, 'ok');
+  } catch(e) {
+    showLog('❌ ' + e.message, 'err');
+  }
+}
+
+function openGitHubPages() {
+  const user = document.getElementById('ghUser').value.trim();
+  const repo = document.getElementById('ghRepo').value.trim();
+  if (!user || !repo) { showLog('ユーザー名とリポジトリ名を設定してください', 'err'); return; }
+  window.open(`https://${user}.github.io/${repo}/`, '_blank');
+}
+
+function saveSettings() {
+  localStorage.setItem('gh_uploader', JSON.stringify({
+    user: document.getElementById('ghUser').value,
+    repo: document.getElementById('ghRepo').value,
+    branch: document.getElementById('ghBranch').value,
+  }));
+  showLog('設定を保存しました', 'ok');
+}
+
+function loadSettings() {
+  try {
+    const s = JSON.parse(localStorage.getItem('gh_uploader') || 'null');
+    if (!s) return;
+    if (s.user)   document.getElementById('ghUser').value   = s.user;
+    if (s.repo) {
+      const sel = document.getElementById('ghRepo');
+      // 保存済みリポジトリ名をoption追加してから選択
+      if (![...sel.options].some(o => o.value === s.repo)) {
+        const opt = document.createElement('option');
+        opt.value = opt.textContent = s.repo;
+        sel.appendChild(opt);
+      }
+      sel.value = s.repo;
+    }
+    if (s.branch) {
+      const sel = document.getElementById('ghBranch');
+      if (![...sel.options].some(o => o.value === s.branch)) {
+        const opt = document.createElement('option');
+        opt.value = opt.textContent = s.branch;
+        sel.appendChild(opt);
+      }
+      sel.value = s.branch;
+    }
+  } catch(e) {}
+}
+
+function addFiles(fileList) {
+  for (const f of fileList) {
+    if (files.some(x => x.file.name === f.name)) continue;
+    files.push({ file: f, path: f.name, status: 'pending' });
+  }
+  renderFileList();
+}
+
+function handleDrop(e) {
+  e.preventDefault();
+  document.getElementById('dropZone').classList.remove('over');
+  addFiles(e.dataTransfer.files);
+}
+
+function renderFileList() {
+  const el = document.getElementById('fileList');
+  el.innerHTML = files.map((f, i) => {
+    const icon = f.status === 'ok' ? '✅' : f.status === 'err' ? '❌' : '📄';
+    return `<div class="file-item">
+      <span class="status">${icon}</span>
+      <div style="flex:1;">
+        <div class="fname">${f.file.name}</div>
+        <div style="display:flex;gap:4px;margin-top:4px;">
+          <input class="path-input" id="path-${i}" value="${f.path}" onchange="files[${i}].path=this.value" placeholder="アップロード先パス (例: index.html)" style="margin-top:0;flex:1;">
+          <button onclick="setPath(${i},'index.html')" style="background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--accent);font-size:11px;padding:4px 8px;cursor:pointer;white-space:nowrap;">index.html</button>
+        </div>
+      </div>
+      <button class="remove" onclick="removeFile(${i})">×</button>
+    </div>`;
+  }).join('');
+}
+
+function setPath(i, val) {
+  files[i].path = val;
+  const el = document.getElementById('path-' + i);
+  if (el) el.value = val;
+}
+
+function removeFile(i) { files.splice(i, 1); renderFileList(); }
+function clearFiles() { files = []; renderFileList(); document.getElementById('fileInput').value = ''; }
+
+function showLog(msg, type) {
+  const el = document.getElementById('log');
+  const d = document.createElement('div');
+  if (type) d.className = type;
+  d.textContent = new Date().toLocaleTimeString() + ' ' + msg;
+  el.appendChild(d);
+  el.scrollTop = el.scrollHeight;
+}
+
+async function uploadAll() {
+  const user   = document.getElementById('ghUser').value.trim();
+  const repo   = document.getElementById('ghRepo').value.trim();
+  const branch = document.getElementById('ghBranch').value.trim() || 'main';
+  const token  = document.getElementById('ghToken').value.trim();
+  const msg    = document.getElementById('commitMsg').value.trim() || 'Update files';
+
+  if (!user || !repo) { showLog('ユーザー名とリポジトリ名を入力してください', 'err'); return; }
+  if (!token) { showLog('トークンを入力してください', 'err'); return; }
+  if (files.length === 0) { showLog('ファイルを選択してください', 'err'); return; }
+
+  const btn = document.getElementById('uploadBtn');
+  btn.disabled = true; btn.textContent = '⏳ アップロード中...';
+
+  for (let i = 0; i < files.length; i++) {
+    const {file, path} = files[i];
+    showLog(path + ' をアップロード中...');
+    try {
+      const content = await new Promise((res, rej) => {
+        const r = new FileReader();
+        r.onload = e => res(e.target.result.split(',')[1]);
+        r.onerror = rej;
+        r.readAsDataURL(file);
+      });
+
+      // 既存SHAを取得
+      let sha = null;
+      try {
+        const g = await fetch(`https://api.github.com/repos/${user}/${repo}/contents/${path}?ref=${branch}`,
+          { headers: { 'Authorization': 'token ' + token } });
+        if (g.ok) sha = (await g.json()).sha;
+      } catch(e) {}
+
+      const body = { message: msg, content, branch };
+      if (sha) body.sha = sha;
+
+      const res = await fetch(`https://api.github.com/repos/${user}/${repo}/contents/${path}`, {
+        method: 'PUT',
+        headers: { 'Authorization': 'token ' + token, 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+
+      if (res.ok) {
+        files[i].status = 'ok';
+        showLog('✅ ' + path + ' 完了', 'ok');
+      } else {
+        const err = await res.json();
+        throw new Error(err.message || res.status);
+      }
+    } catch(e) {
+      files[i].status = 'err';
+      showLog('❌ ' + path + ' エラー: ' + e.message, 'err');
+    }
+    renderFileList();
+  }
+
+  btn.disabled = false; btn.textContent = '🚀 アップロード';
+  showLog('完了！', 'ok');
+}
+
+loadSettings();
+const savedToken = localStorage.getItem('gh_token');
+if (savedToken) document.getElementById('ghToken').value = savedToken;
+</script>
+</body>
+</html>
